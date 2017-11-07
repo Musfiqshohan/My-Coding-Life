@@ -1,0 +1,171 @@
+import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.FileReader;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.Random;
+import java.util.Scanner;
+
+public class arq_Client {
+
+
+    static  boolean isSend[]= new boolean[1000000];
+    static String mainText;
+
+
+    static  String ReadFromFile() throws  Exception
+    {
+        BufferedReader br= new BufferedReader(new FileReader("input.txt"));
+
+        String FullText="",currentLine="";
+
+        while ((currentLine= br.readLine())!=null)
+        {
+            FullText+=currentLine+'#';
+        }
+
+        return  FullText;
+
+    }
+
+
+
+    static  String ReturnCurrentMsg(int lastInd)
+    {
+        String ret="";
+        ret+= mainText.charAt(lastInd);
+
+        for(int i=lastInd+1;i<Math.min(mainText.length() ,lastInd+8);i++)
+        {
+            if(isSend[i]==true)
+                ret+='-';
+            else {
+                ret += mainText.charAt(i);
+            }
+        }
+
+
+        return ret;
+    }
+
+    public static void main(String[] args) {
+
+        try {
+
+            Socket s = new Socket("localhost", 8800);
+            System.out.println("Server Connected");
+            DataInputStream din = new DataInputStream(s.getInputStream());
+            DataOutputStream dout = new DataOutputStream(s.getOutputStream());
+
+            Random rand= new Random();
+
+
+            mainText = ReadFromFile();
+
+            System.out.println("Total frame :"+mainText.length());
+            String sendMsg = "", found;
+
+
+            int cnt = 0,lastInd=0, windowNum=0;
+
+            for (int i = 0; i < mainText.length(); i++) {
+                sendMsg += mainText.charAt(i);
+                cnt++;
+
+                isSend[i] = true;
+
+
+                if (cnt == 8  || i==mainText.length()-1) {
+
+
+                    while (true) {
+
+                        System.out.println();
+
+                        windowNum++;
+
+                        System.out.println("Send message from client: "+sendMsg);
+
+                        int rr= rand.nextInt(3);
+
+                        if(rr==0)
+                        {
+                            Thread.sleep(500);
+                            System.out.println("Time out occured for window "+windowNum+" from"+(lastInd-sendMsg.length())+" to "+lastInd);
+                            dout.writeUTF("here");
+                            String returnMsg=din.readUTF();
+                            System.out.println(returnMsg);
+                            windowNum++;
+                        }
+
+                        long startTime= System.currentTimeMillis();
+                        System.out.println("Start time for window: "+windowNum+" : "+startTime);
+
+                        dout.writeUTF(sendMsg);
+
+                        s.setSoTimeout(50000);
+                        found = din.readUTF();
+
+                        long endTime= System.currentTimeMillis();
+
+                        long elapsed= (endTime-startTime);
+                        System.out.println("Ending time "+endTime+ " Elapsed: "+elapsed);
+                       // System.out.println(elapsed + " "+found);
+
+                        if(elapsed>1500)
+                        {
+                            System.out.println("Acknowledgement is not received for window: "+ windowNum);
+                            found=din.readUTF();
+                        }
+
+
+
+                        if (found.equals("OK")) {
+                            cnt = 0;
+                            int l,r;
+
+                            l=lastInd;
+                            lastInd=lastInd+sendMsg.length();
+                            r=lastInd;
+
+                            i=lastInd-1;
+                            System.out.println("Window :"+windowNum+" from "+l+" "+r+" received successfully.");
+                            sendMsg = "";
+                            break;
+
+                        }
+                        else {
+                            System.out.println("Negative Acknowledgement for "+windowNum+" from "+lastInd+" "+(lastInd-sendMsg.length()));
+                          lastInd = Integer.parseInt(found);
+
+                            if(lastInd>=mainText.length())
+                            {
+                                i=lastInd;
+                                break;
+                            }
+
+
+                            sendMsg = ReturnCurrentMsg(lastInd);
+
+                        }
+
+
+
+                    }
+                }
+
+
+            }
+
+
+            dout.writeUTF("End"+mainText.length());
+
+
+        }
+        catch (Exception e) {}
+
+
+    }
+
+}
