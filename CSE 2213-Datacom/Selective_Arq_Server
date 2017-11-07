@@ -1,0 +1,192 @@
+import java.io.BufferedWriter;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.FileWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.Random;
+import java.util.Scanner;
+
+public class arq_Server {
+
+
+    static  boolean isReceived[]= new boolean[1000000];
+    static char mainText[]= new char[100000];
+    static  int lastInd,FinalSize;
+
+
+    static public void WriteInFile(String message)
+    {
+
+        try {
+            BufferedWriter bw = new BufferedWriter(new FileWriter("output.txt"));
+
+            for (int i = 0; i < message.length(); i++) {
+                if (message.charAt(i) == '#')
+                    bw.append('\n');
+                else
+                    bw.write(message.charAt(i));
+            }
+            bw.close();
+        }catch (Exception e) {}
+
+
+    }
+
+
+    static int WriteInArray(String rcvd, int last, int occurError)
+    {
+
+        int L=rcvd.length();
+
+        System.out.println("which is last "+last);
+
+      //  System.out.println("len: "+L);
+
+        for(int i=last,j=0;j<rcvd.length();i++,j++)
+        {
+            if(rcvd.charAt(j)==' ')
+               mainText[i]='!';
+          /* if (rcvd.charAt(j) != '-')
+                mainText[i] = rcvd.charAt(j);*/
+
+          if( isReceived[i]==false) {
+              mainText[i] = rcvd.charAt(j);
+              isReceived[i]=true;
+
+
+          }
+            //System.out.println("at i="+i+ "  "+rcvd.charAt(j));
+           // System.out.println("i= "+i);
+        }
+
+        if(occurError<L) {
+            mainText[last + occurError] = '*';
+            last+=occurError;
+            isReceived[last]=false;
+           // System.out.println("specific= "+last);
+        }
+
+        else if(occurError>=L)
+            last+=rcvd.length();
+
+
+        return last;
+
+    }
+
+
+
+    public static void main(String[] args)   {
+        try {
+
+            Scanner sc = new Scanner(System.in);
+            ServerSocket ss = new ServerSocket(8800);
+            Socket s = ss.accept();
+            System.out.println("Connected to Client");
+
+            DataInputStream din = new DataInputStream(s.getInputStream());
+            DataOutputStream dout = new DataOutputStream(s.getOutputStream());
+            Random rand = new Random();
+
+
+            lastInd = 0;
+
+            int windowNum=0;
+            while (true) {
+
+                System.out.println();
+                windowNum++;
+
+                long startTime = System.currentTimeMillis();
+
+                String rcvd = din.readUTF();
+
+                long endTime = System.currentTimeMillis();
+                long elapsed = endTime - startTime;
+             /*   System.out.println("elapesed in server: " + elapsed);
+                System.out.println("received in server: " + rcvd);*/
+
+                if (elapsed > 300) {
+                    System.out.println(windowNum+" No data received from client");
+                    dout.writeUTF("Data Lost");
+                    rcvd = din.readUTF();
+                    windowNum++;
+                }
+
+
+                int rr = rand.nextInt(3);
+
+                if (rr == 0)
+                {
+                    Thread.sleep(2000);
+
+                    dout.writeUTF("time error from server");
+
+                }else
+                Thread.sleep(1000);
+
+                if (rcvd.charAt(0)=='E'  && rcvd.charAt(1)=='n') {
+                    String tem="";
+                    for(int i=3;i<rcvd.length();i++)
+                        tem+=rcvd.charAt(i);
+
+                    FinalSize= Integer.parseInt(tem);
+                    System.out.println("final: "+FinalSize);
+
+                    break;
+
+                }
+
+
+                System.out.println("Received: window: "+windowNum+ ": "+rcvd);
+                int r1=rand.nextInt(rcvd.length() * 2 + 1);
+                lastInd = WriteInArray(rcvd, lastInd, r1);
+
+
+
+                if (r1 < rcvd.length()) {
+                    String sendInd = new Integer(lastInd).toString();
+                    dout.writeUTF(sendInd);
+                    System.out.println("Error occured in frame: "+sendInd+ " in window:"+windowNum);
+                } else {
+                    System.out.println("Received message successfully");
+                    dout.writeUTF("OK");
+                }
+
+
+
+            }
+
+
+
+
+        }
+        catch (Exception e) {}
+        finally {
+            System.out.println("hi");
+
+            String receivedmsg = "";
+            // for (int i = 0; i < lastInd; i++)
+
+           for(int i=0;i<FinalSize;i++)
+            {
+
+                if(mainText[i]=='!')
+                    receivedmsg+=' ';
+                else if(isReceived[i]==true)
+                receivedmsg += mainText[i];
+
+            }
+
+
+            System.out.println("->"+receivedmsg);
+            WriteInFile(receivedmsg);
+
+
+
+        }
+
+
+    }
+}
